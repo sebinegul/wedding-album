@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
-import { Copy, QrCode, X } from "@phosphor-icons/react";
+import { Copy, DownloadSimple, Printer, QrCode, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import type { Album } from "@/lib/types";
 import { Button } from "./ui";
+import { cn } from "@/lib/utils";
 
 export function ShareDialog({
   open,
@@ -111,6 +112,40 @@ export function ShareDialog({
                 <Copy size={14} />
                 {copied ? "Copied" : "Copy"}
               </Button>
+            </div>
+
+            {/* Print templates */}
+            <div className="mt-5 border-t border-stone-200 pt-4 dark:border-stone-800">
+              <div className="mb-2.5 flex items-center gap-1.5">
+                <Printer size={14} className="text-stone-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                  Print templates
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { format: "a6", label: "A6 card (PDF)" },
+                    { format: "a4", label: "A4 poster (PDF)" },
+                  ] as const
+                ).map(({ format, label }) => (
+                  <a
+                    key={format}
+                    href={`/api/albums/${album.id}/print?format=${format}`}
+                    download={`wedding-album-${format}.pdf`}
+                    className={cn(
+                      "press inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-stone-300 bg-white px-3 text-xs font-medium whitespace-nowrap text-stone-800 hover:bg-stone-100",
+                      "dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800",
+                    )}
+                  >
+                    <DownloadSimple size={13} />
+                    {label}
+                  </a>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-stone-400 dark:text-stone-500">
+                Print-ready PDF with 3 mm bleed and crop marks.
+              </p>
             </div>
           </motion.div>
         </motion.div>
