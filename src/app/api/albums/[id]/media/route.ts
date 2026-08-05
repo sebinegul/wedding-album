@@ -15,6 +15,7 @@ import {
 } from "@/lib/storage";
 import { dimsSchema } from "@/lib/validation";
 import { emitToAlbum } from "@/lib/events";
+import { isAdminCode } from "@/lib/admin";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -131,9 +132,11 @@ export async function DELETE(request: Request, { params }: Params) {
 
   const ownerId = searchParams.get("ownerId");
   const guestId = searchParams.get("guestId");
+  const adminCode = searchParams.get("adminCode");
   const isOwner = album.ownerId === ownerId;
   const isUploader = media.uploadedBy === guestId;
-  if (!isOwner && !isUploader) {
+  const isAdmin = isAdminCode(adminCode);
+  if (!isOwner && !isUploader && !isAdmin) {
     return NextResponse.json(
       { error: "Only the album owner or the uploader can remove this" },
       { status: 403 },

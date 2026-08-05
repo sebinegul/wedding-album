@@ -10,8 +10,10 @@ import {
   GridFour,
   Images,
   ListBullets,
+  LockKey,
   MagnifyingGlass,
   ShareNetwork,
+  ShieldCheck,
   UploadSimple,
   Users,
   VideoCamera,
@@ -55,8 +57,13 @@ export function AlbumView({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
+  const [adminPrompt, setAdminPrompt] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+  const [adminActive, setAdminActive] = useState(false);
+  const [adminUnlocking, setAdminUnlocking] = useState(false);
 
   const isOwner = ownerId === album.ownerId;
+  const isAdmin = adminActive && adminCode.length > 0;
   const photoCount = media.filter((m) => m.kind === "image").length;
   const videoCount = media.length - photoCount;
 
@@ -130,6 +137,7 @@ export function AlbumView({
         body: JSON.stringify({
           guestId: identity?.id ?? undefined,
           ownerId: ownerId ?? undefined,
+          adminCode: isAdmin ? adminCode : undefined,
         }),
       });
       if (!res.ok) {
@@ -141,6 +149,31 @@ export function AlbumView({
       toast.success("Removed from the album");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not remove this item");
+    }
+  };
+
+  const unlockAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminCode.trim().length < 4) return;
+    setAdminUnlocking(true);
+    try {
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminCode: adminCode.trim() }),
+      });
+      if (!res.ok) {
+        setAdminCode("");
+        toast.error("That admin code is not right");
+        return;
+      }
+      setAdminActive(true);
+      setAdminPrompt(false);
+      toast.success("Admin mode on - you can remove any photo");
+    } catch {
+      toast.error("Could not verify the admin code");
+    } finally {
+      setAdminUnlocking(false);
     }
   };
 
@@ -249,6 +282,25 @@ export function AlbumView({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {isAdmin ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setAdminActive(false);
+                setAdminCode("");
+                setAdminPrompt(false);
+              }}
+              title="Turn off admin mode"
+            >
+              <ShieldCheck size={16} weight="fill" className="text-emerald-600 dark:text-emerald-400" />
+              Admin on
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={() => setAdminPrompt((v) => !v)}>
+              <LockKey size={16} />
+              Admin
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setShareOpen(true)}>
             <ShareNetwork size={16} />
             Share
@@ -259,6 +311,38 @@ export function AlbumView({
           </Button>
         </div>
       </motion.div>
+
+      {/* Admin unlock */}
+      {adminPrompt && !isAdmin && (
+        <motion.form
+          onSubmit={unlockAdmin}
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="mb-6 flex flex-col gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4 sm:flex-row sm:items-center dark:border-stone-800 dark:bg-stone-900"
+        >
+          <p className="text-sm text-stone-700 sm:flex-1 dark:text-stone-300">
+            Enter the admin code to manage every photo in this album.
+          </p>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <Input
+              type="password"
+              value={adminCode}
+              onChange={(e) => setAdminCode(e.target.value)}
+              placeholder="Admin code"
+              aria-label="Admin code"
+              autoComplete="off"
+              className="h-9 sm:w-44"
+            />
+            <Button type="submit" size="sm" disabled={adminUnlocking}>
+              {adminUnlocking ? <Spinner /> : "Unlock"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAdminPrompt(false)}>
+              Cancel
+            </Button>
+          </div>
+        </motion.form>
+      )}
 
       {/* Identity gate */}
       {!identity && (
@@ -345,7 +429,7 @@ export function AlbumView({
           index={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onNavigate={(i) => setLightboxIndex(i)}
-          canDelete={(item) => isOwner || item.uploadedBy === identity?.id}
+          canDelete={(item) => isOwner || isAdmin || item.uploadedBy === identity?.id}
           onDelete={deleteItem}
         />
       )}

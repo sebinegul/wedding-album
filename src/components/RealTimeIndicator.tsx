@@ -8,6 +8,7 @@ const COPY: Record<RealtimeStatus, string> = {
   connecting: "Connecting",
   live: "Live",
   offline: "Offline",
+  disabled: "Offline",
 };
 
 /**
@@ -25,6 +26,8 @@ export function RealTimeIndicator({
   className?: string;
 }) {
   const isLive = status === "live";
+  // No relay configured: nothing to indicate; the app polls in the background.
+  if (status === "disabled") return null;
   return (
     <div
       role="status"

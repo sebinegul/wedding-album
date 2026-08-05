@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
-import { Images, Play } from "@phosphor-icons/react";
+import { Images, Play, User } from "@phosphor-icons/react";
 import type { MediaItem } from "@/lib/types";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 
@@ -75,6 +75,12 @@ function MediaThumb({
           className="h-auto w-full transition-transform duration-300 ease-out group-hover:scale-[1.04]"
         />
       )}
+
+      {/* Uploader tag */}
+      <span className="absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-full bg-stone-950/55 px-2 py-0.5 text-[11px] font-medium text-white/95 backdrop-blur-sm">
+        <User size={10} weight="fill" className="shrink-0" />
+        <span className="truncate">{item.uploadedByName}</span>
+      </span>
     </button>
   );
 }

@@ -43,4 +43,4 @@ export type GuestIdentity = {
   name: string;
 };
 
-export type RealtimeStatus = "connecting" | "live" | "offline";
+export type RealtimeStatus = "connecting" | "live" | "offline" | "disabled";
