@@ -176,6 +176,8 @@ export async function buildAlbumPrintPdf({
   const { wMm, hMm } = TRIM[format];
 
   const doc = await PDFDocument.create();
+  // Custom TTF embedding (and subsetting) requires pdf-lib's fontkit companion.
+  doc.registerFontkit(fontkit);
   const [script, body, label] = await Promise.all([
     doc.embedFont(await loadFont(FONT_FILES.script), { subset: true }),
     doc.embedFont(await loadFont(FONT_FILES.body), { subset: true }),
