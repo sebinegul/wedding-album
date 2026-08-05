@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   const { id } = await params;
-  const detail = getAlbumDetail(id);
+  const detail = await getAlbumDetail(id);
   if (!detail) {
     return NextResponse.json({ error: "Album not found" }, { status: 404 });
   }
@@ -28,10 +28,10 @@ export async function DELETE(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Owner verification required" }, { status: 401 });
   }
 
-  const removed = deleteAlbum(id, parsed.data.ownerId);
+  const removed = await deleteAlbum(id, parsed.data.ownerId);
   if (!removed) {
     return NextResponse.json({ error: "Album not found or not the owner" }, { status: 404 });
   }
-  deleteAlbumUploads(id);
+  await deleteAlbumUploads(id);
   return NextResponse.json({ ok: true });
 }

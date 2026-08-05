@@ -35,9 +35,11 @@ async function broadcastStats(albumId) {
 }
 
 io.on("connection", (socket) => {
+  console.log(`[ws] client connected: ${socket.id}`);
   socket.on("album:join", (albumId) => {
     if (typeof albumId !== "string" || !albumId) return;
     socket.join(roomFor(albumId));
+    console.log(`[ws] ${socket.id} joined ${roomFor(albumId)}`);
     broadcastStats(albumId);
   });
 
@@ -51,6 +53,7 @@ io.on("connection", (socket) => {
   for (const event of ["media:new", "media:deleted", "guest:joined"]) {
     socket.on(event, (payload) => {
       const albumId = payload && payload.albumId;
+      console.log(`[ws] relay ${event} for album ${albumId}`);
       if (typeof albumId !== "string" || !albumId) return;
       io.to(roomFor(albumId)).emit(event, payload);
     });
@@ -69,4 +72,16 @@ io.on("connection", (socket) => {
 });
 
 io.listen(PORT);
-console.log(`[wedding-album] realtime server listening on ws://localhost:${PORT}`);
+io.engine.on("connection_error", (err) => {
+  console.error(`[wedding-album] ws connection error: ${err.code || err.message}`);
+});
+io.httpServer.on("listening", () => {
+  console.log(`[wedding-album] realtime server listening on ws://localhost:${PORT}`);
+});
+io.httpServer.on("error", (err) => {
+  console.error(
+    `[wedding-album] cannot start on port ${PORT}: ${err.message}. ` +
+      "Another process may be using it; set WS_PORT to a free port.",
+  );
+  process.exit(1);
+});

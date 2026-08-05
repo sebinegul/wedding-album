@@ -28,10 +28,10 @@ A real-time shared photo and video album for wedding celebrations. Guests scan a
 - **Zod** - Type validation
 
 ### Backend
-- **Next.js API Routes** - Server actions and REST APIs
+- **Next.js API Routes** - REST APIs
 - **WebSockets (Socket.io)** - Real-time updates
-- **Neondatabase** - Free PostgreSQL database
-- **UploadThing** - File upload handling
+- **MongoDB Atlas** - Optional database (falls back to a zero-config local JSON store)
+- **S3-compatible storage** - Optional cloud media storage (Cloudflare R2, Backblaze B2; falls back to local disk)
 
 ### DevOps
 - **Vercel** - Deployment and hosting
@@ -149,11 +149,12 @@ npm install
 
 # Setup environment
 cp .env.example .env.local
-
-# Initialize database
-npx prisma generate
-npx prisma migrate dev
 ```
+
+The app runs out of the box with zero configuration: albums live in
+data/db.json and uploads on local disk. To use MongoDB Atlas and cloud
+storage, add MONGODB_URI and the S3_* variables to .env.local (see
+.env.example).
 
 ### Development
 ```bash
@@ -203,12 +204,15 @@ npm run deploy
 
 ### Environment Variables
 ```env
-# Database
-DATABASE_URL=postgresql://...
+# Database (optional; unset = local JSON store)
+MONGODB_URI=mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/wedding-album
 
-# UploadThing
-UPLOADTHING_SECRET=...
-UPLOADTHING_APP_ID=...
+# Media storage (optional; unset = local disk). Any S3-compatible bucket.
+S3_BUCKET=wedding-album
+S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
 
 # WebSocket
 NEXT_PUBLIC_WS_URL=ws://localhost:3001

@@ -7,7 +7,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const detail = getAlbumDetail(id);
+  const detail = await getAlbumDetail(id);
   if (!detail) return { title: "Album not found" };
   return {
     title: detail.album.title,
@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function AlbumPage({ params }: Props) {
   const { id } = await params;
-  const detail = getAlbumDetail(id);
+  const detail = await getAlbumDetail(id);
   if (!detail) notFound();
 
   return (

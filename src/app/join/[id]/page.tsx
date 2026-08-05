@@ -8,7 +8,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const album = getAlbum(id);
+  const album = await getAlbum(id);
   if (!album) return { title: "Album not found" };
   return {
     title: `Join ${album.title}`,
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function JoinPage({ params }: Props) {
   const { id } = await params;
-  const album = getAlbum(id);
+  const album = await getAlbum(id);
   if (!album) notFound();
 
   return (

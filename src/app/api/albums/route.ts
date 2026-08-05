@@ -3,7 +3,7 @@ import { createAlbumSchema } from "@/lib/validation";
 import { createAlbum, listAlbums } from "@/lib/store";
 
 export async function GET() {
-  const albums = listAlbums(12);
+  const albums = await listAlbums(12);
   return NextResponse.json({ albums });
 }
 
@@ -23,6 +23,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const album = createAlbum(parsed.data);
+  const album = await createAlbum(parsed.data);
   return NextResponse.json({ album }, { status: 201 });
 }

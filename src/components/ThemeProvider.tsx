@@ -50,7 +50,7 @@ export function useTheme() {
  * there are no cascading renders and no hydration mismatch.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const theme = useSyncExternalStore(subscribe, getSnapshot);
+  const theme = useSyncExternalStore<Theme>(subscribe, getSnapshot, () => "light");
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -68,6 +68,3 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     </ThemeContext.Provider>
   );
 }
-
-/** Runs before first paint so the page never flashes the wrong theme. */
-export const themeInitScript = `try{var t=localStorage.getItem("wa:theme");if(!t){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}if(t==="dark")document.documentElement.classList.add("dark");}catch(e){}`;

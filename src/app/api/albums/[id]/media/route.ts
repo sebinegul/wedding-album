@@ -20,7 +20,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
-  const album = getAlbum(id);
+  const album = await getAlbum(id);
   if (!album) {
     return NextResponse.json({ error: "Album not found" }, { status: 404 });
   }
@@ -53,7 +53,7 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "No files selected" }, { status: 400 });
   }
 
-  const guest = addGuest(id, guestName);
+  const guest = await addGuest(id, guestName);
   const uploaded: Awaited<ReturnType<typeof addMedia>>[] = [];
   const errors: string[] = [];
 
@@ -76,10 +76,10 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { fileName, url } = saveUpload(id, `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file.name, file.type, buffer);
+    const { fileName, url } = await saveUpload(id, `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file.name, file.type, buffer);
 
     const dims = dimsByName.get(file.name);
-    const media = addMedia(id, {
+    const media = await addMedia(id, {
       url,
       fileName,
       originalName: file.name,
@@ -107,7 +107,7 @@ export async function POST(request: Request, { params }: Params) {
 
 export async function DELETE(request: Request, { params }: Params) {
   const { id } = await params;
-  const album = getAlbum(id);
+  const album = await getAlbum(id);
   if (!album) {
     return NextResponse.json({ error: "Album not found" }, { status: 404 });
   }
@@ -118,7 +118,7 @@ export async function DELETE(request: Request, { params }: Params) {
     return NextResponse.json({ error: "mediaId is required" }, { status: 400 });
   }
 
-  const media = getMedia(id, mediaId);
+  const media = await getMedia(id, mediaId);
   if (!media) {
     return NextResponse.json({ error: "Media not found" }, { status: 404 });
   }
@@ -134,9 +134,9 @@ export async function DELETE(request: Request, { params }: Params) {
     );
   }
 
-  const removed = deleteMedia(id, mediaId);
+  const removed = await deleteMedia(id, mediaId);
   if (removed) {
-    deleteUpload(id, removed.fileName);
+    await deleteUpload(id, removed.fileName);
     emitToAlbum(id, "media:deleted", { mediaId });
   }
   return NextResponse.json({ ok: true });

@@ -1,15 +1,36 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Readable } from "node:stream";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from "@aws-sdk/client-s3";
 
 /**
- * Local filesystem storage for uploaded media.
+ * Media storage with two interchangeable drivers, selected by environment:
  *
- * Files land in public/uploads/<albumId>/ so Next.js serves them as static
- * assets. Swap this module for UploadThing/S3 when deploying to a serverless
- * host (see docs/architecture.md); the store layer is independent.
+ *  - STORAGE_DRIVER=s3 (or S3_BUCKET set) -> any S3-compatible bucket:
+ *    Cloudflare R2, Backblaze B2, AWS S3, MinIO. Objects are stored under
+ *    <albumId>/<fileName> and streamed back through GET /api/media.
+ *  - Default -> local disk under data/uploads/<albumId>/ (outside public/,
+ *    so uploads never enter the build). Works in dev and `next start`.
+ *
+ * Files are immutable once written, so the serving route caches forever.
  */
 
-const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
+const UPLOADS_DIR = path.join(process.cwd(), "data", "uploads");
+
+const DRIVER =
+  (process.env.STORAGE_DRIVER ?? (process.env.S3_BUCKET ? "s3" : "local")).toLowerCase() ===
+  "s3"
+    ? "s3"
+    : "local";
+
+export const storageDriver: "local" | "s3" = DRIVER;
 
 export const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB
 export const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200 MB
@@ -51,25 +72,156 @@ function extensionFor(mime: string, originalName: string): string {
   return map[mime] ?? ".bin";
 }
 
-export function saveUpload(
+function localPath(albumId: string, fileName: string): string {
+  return path.join(UPLOADS_DIR, albumId, fileName);
+}
+
+// ---------------------------------------------------------------------------
+// S3-compatible driver (Cloudflare R2 / Backblaze B2 / AWS S3 / MinIO)
+// ---------------------------------------------------------------------------
+
+let s3: S3Client | null = null;
+
+function s3Client(): S3Client {
+  if (!s3) {
+    if (!process.env.S3_ACCESS_KEY_ID || !process.env.S3_SECRET_ACCESS_KEY || !process.env.S3_BUCKET) {
+      throw new Error(
+        "S3 storage requires S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_BUCKET",
+      );
+    }
+    s3 = new S3Client({
+      region: process.env.S3_REGION || "auto",
+      endpoint: process.env.S3_ENDPOINT || undefined,
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+  return s3;
+}
+
+const BUCKET = process.env.S3_BUCKET ?? "";
+
+function s3Key(albumId: string, fileName: string): string {
+  return `${albumId}/${fileName}`;
+}
+
+async function s3DeleteAlbum(albumId: string): Promise<void> {
+  const client = s3Client();
+  let token: string | undefined;
+  do {
+    const listed = await client.send(
+      new ListObjectsV2Command({
+        Bucket: BUCKET,
+        Prefix: `${albumId}/`,
+        ContinuationToken: token,
+      }),
+    );
+    const keys = (listed.Contents ?? [])
+      .map((o) => o.Key)
+      .filter((k): k is string => Boolean(k));
+    if (keys.length > 0) {
+      await client.send(
+        new DeleteObjectsCommand({
+          Bucket: BUCKET,
+          Delete: { Objects: keys.map((Key) => ({ Key })) },
+        }),
+      );
+    }
+    token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (token);
+}
+
+// ---------------------------------------------------------------------------
+// Storage API (async, driver-agnostic)
+// ---------------------------------------------------------------------------
+
+export async function saveUpload(
   albumId: string,
   mediaId: string,
   originalName: string,
   mime: string,
   data: Buffer,
-): { fileName: string; url: string } {
-  const dir = path.join(UPLOADS_DIR, albumId);
-  fs.mkdirSync(dir, { recursive: true });
+): Promise<{ fileName: string; url: string }> {
   const fileName = `${mediaId}-${sanitizeFileName(originalName)}${extensionFor(mime, originalName)}`;
-  fs.writeFileSync(path.join(dir, fileName), data);
-  return { fileName, url: `/uploads/${albumId}/${fileName}` };
+  if (DRIVER === "s3") {
+    await s3Client().send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: s3Key(albumId, fileName),
+        Body: data,
+        ContentType: mime,
+      }),
+    );
+  } else {
+    const dir = path.join(UPLOADS_DIR, albumId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(localPath(albumId, fileName), data);
+  }
+  return { fileName, url: `/api/media/${albumId}/${fileName}` };
 }
 
-export function deleteUpload(albumId: string, fileName: string): void {
-  const filePath = path.join(UPLOADS_DIR, albumId, fileName);
-  fs.rmSync(filePath, { force: true });
+export async function deleteUpload(albumId: string, fileName: string): Promise<void> {
+  if (DRIVER === "s3") {
+    try {
+      await s3Client().send(
+        new DeleteObjectCommand({ Bucket: BUCKET, Key: s3Key(albumId, fileName) }),
+      );
+    } catch {
+      // delete is idempotent; missing objects are not an error
+    }
+  } else {
+    fs.rmSync(localPath(albumId, fileName), { force: true });
+  }
 }
 
-export function deleteAlbumUploads(albumId: string): void {
-  fs.rmSync(path.join(UPLOADS_DIR, albumId), { recursive: true, force: true });
+export async function deleteAlbumUploads(albumId: string): Promise<void> {
+  if (DRIVER === "s3") {
+    await s3DeleteAlbum(albumId);
+  } else {
+    fs.rmSync(path.join(UPLOADS_DIR, albumId), { recursive: true, force: true });
+  }
+}
+
+export async function getUploadStream(
+  albumId: string,
+  fileName: string,
+): Promise<{ stream: Readable; size?: number } | null> {
+  if (DRIVER === "s3") {
+    try {
+      const res = await s3Client().send(
+        new GetObjectCommand({ Bucket: BUCKET, Key: s3Key(albumId, fileName) }),
+      );
+      if (!res.Body) return null;
+      return {
+        stream: res.Body as Readable,
+        size: res.ContentLength ?? undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+  const filePath = localPath(albumId, fileName);
+  if (!fs.existsSync(filePath)) return null;
+  return {
+    stream: fs.createReadStream(filePath),
+    size: fs.statSync(filePath).size,
+  };
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".heic": "image/heic",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
+};
+
+export function mimeForFileName(fileName: string): string {
+  return MIME_BY_EXT[path.extname(fileName).toLowerCase()] ?? "application/octet-stream";
 }

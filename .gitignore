@@ -43,4 +43,3 @@ next-env.d.ts
 # app data
 /data/*
 !/data/.gitkeep
-/public/uploads/*
