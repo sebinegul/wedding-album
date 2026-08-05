@@ -20,6 +20,7 @@ export function CreateAlbumWizard() {
   const [ownerName, setOwnerName] = useState("");
   const [couple, setCouple] = useState("");
   const [title, setTitle] = useState("");
+  const [adminCode, setAdminCode] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [album, setAlbum] = useState<Album | null>(null);
@@ -47,6 +48,7 @@ export function CreateAlbumWizard() {
     if (ownerName.trim().length < 2) next.ownerName = "Please enter your name";
     if (couple.trim().length < 2) next.couple = "Enter both names, for example Aarav and Meera";
     if (title.trim().length < 2) next.title = "Give the album a title";
+    if (adminCode.trim().length < 4) next.adminCode = "Enter the admin code";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -59,9 +61,15 @@ export function CreateAlbumWizard() {
           ownerName: ownerName.trim(),
           couple: couple.trim(),
           title: title.trim(),
+          adminCode: adminCode.trim(),
         }),
       });
       const data = await res.json();
+      if (res.status === 403) {
+        setAdminCode("");
+        setErrors({ adminCode: "That admin code is not right" });
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "Could not create the album");
       setAlbum(data.album as Album);
       setOwnerId(data.album.id, data.album.ownerId);
@@ -139,6 +147,7 @@ export function CreateAlbumWizard() {
                 setTitle("");
                 setCouple("");
                 setOwnerName("");
+                setAdminCode("");
               }}
             >
               Create another
@@ -209,6 +218,32 @@ export function CreateAlbumWizard() {
           {errors.title && (
             <p id="wa-title-error" role="alert" className="mt-1.5 text-sm text-rose-600 dark:text-rose-400">
               {errors.title}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <Label htmlFor="wa-admin-code">Admin code</Label>
+          <Input
+            id="wa-admin-code"
+            type="password"
+            value={adminCode}
+            onChange={(e) => {
+              setAdminCode(e.target.value);
+              setErrors((prev) => ({ ...prev, adminCode: "" }));
+            }}
+            placeholder="The couple's code"
+            autoComplete="off"
+            aria-invalid={Boolean(errors.adminCode)}
+            aria-describedby={errors.adminCode ? "wa-admin-code-error" : "wa-admin-code-hint"}
+          />
+          {errors.adminCode ? (
+            <p id="wa-admin-code-error" role="alert" className="mt-1.5 text-sm text-rose-600 dark:text-rose-400">
+              {errors.adminCode}
+            </p>
+          ) : (
+            <p id="wa-admin-code-hint" className="mt-1.5 text-sm text-stone-500 dark:text-stone-400">
+              Only the couple can create albums. Guests can join with the album code instead.
             </p>
           )}
         </div>

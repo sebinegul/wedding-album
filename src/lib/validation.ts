@@ -4,6 +4,7 @@ export const createAlbumSchema = z.object({
   title: z.string().trim().min(2, "Album title is required").max(80),
   couple: z.string().trim().min(2, "Couple names are required").max(80),
   ownerName: z.string().trim().min(2, "Your name is required").max(60),
+  adminCode: z.string().trim().min(4).max(64).optional(),
 });
 
 export const guestSchema = z.object({
