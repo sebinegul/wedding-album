@@ -1,251 +1,340 @@
 "use client";
 
-import { useState, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, X, CheckCircle, AlertCircle, Image as ImageIcon, Video, FileText } from 'lucide-react';
-import { toast } from 'sonner';
+import { useCallback, useRef, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { CheckCircle, Images, UploadSimple, VideoCamera, WarningCircle, X } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import type { GuestIdentity, MediaItem } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { Button } from "./ui";
 
-interface UploadZoneProps {
-  onUpload: (files: FileList) => Promise<void>;
-  albumId: string;
-  userId: string;
-  maxSize?: number;
+type UploadStatus = "uploading" | "done" | "error";
+
+type FileState = {
+  name: string;
+  status: UploadStatus;
+  error?: string;
+};
+
+const MAX_IMAGE = 25 * 1024 * 1024;
+const MAX_VIDEO = 200 * 1024 * 1024;
+
+type DimsEntry = { name: string; width: number; height: number };
+
+async function detectDimensions(file: File): Promise<{ width?: number; height?: number }> {
+  if (!file.type.startsWith("image/")) return {};
+  try {
+    const bitmap = await createImageBitmap(file);
+    const dims = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dims;
+  } catch {
+    return {};
+  }
 }
 
-export function UploadZone({ onUpload, albumId, userId, maxSize = 50 * 1024 * 1024 }: UploadZoneProps) {
+function uploadFiles(params: {
+  albumId: string;
+  files: File[];
+  guest: GuestIdentity | null;
+  onProgress: (name: string, progress: number) => void;
+}): Promise<{ media: MediaItem[]; errors: string[]; message: string }> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const dims: DimsEntry[] = [];
+      for (const file of params.files) {
+        if (file.type.startsWith("image/")) {
+          const d = await detectDimensions(file);
+          if (d.width && d.height) dims.push({ name: file.name, width: d.width, height: d.height });
+        }
+      }
+
+      const form = new FormData();
+      for (const file of params.files) form.append("files", file);
+      form.append("guestName", params.guest?.name ?? "");
+      form.append("dims", JSON.stringify(dims));
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/albums/${params.albumId}/media`);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          params.onProgress("__all__", pct);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error("Unexpected server response"));
+          }
+        } else {
+          let message = "Upload failed";
+          try {
+            message = JSON.parse(xhr.responseText).error ?? message;
+          } catch {
+            /* keep default */
+          }
+          reject(new Error(message));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error while uploading"));
+      xhr.send(form);
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Upload failed"));
+    }
+  });
+}
+
+export function UploadZone({
+  albumId,
+  guest,
+  onUploaded,
+}: {
+  albumId: string;
+  guest: GuestIdentity | null;
+  onUploaded: (media: MediaItem[]) => void;
+}) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [overall, setOverall] = useState(0);
+  const [fileStates, setFileStates] = useState<FileState[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const reduceMotion = useReducedMotion();
 
-  const validateFile = (file: File): string | null => {
-    // Check file size
-    if (file.size > maxSize) {
-      return `File too large. Maximum size is ${Math.round(maxSize / (1024 * 1024))}MB`;
+  const setFileState = (name: string, patch: Partial<FileState>) => {
+    setFileStates((prev) =>
+      prev.map((f) => (f.name === name ? { ...f, ...patch } : f)),
+    );
+  };
+
+  const validate = (file: File): string | null => {
+    const images = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"];
+    const videos = ["video/mp4", "video/quicktime", "video/webm"];
+    if (![...images, ...videos].includes(file.type)) {
+      return "Unsupported type, use JPG, PNG, GIF, WebP, MP4, MOV or WebM";
     }
-
-    // Check file type
-    const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    const videoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
-    const allowedTypes = [...imageTypes, ...videoTypes];
-
-    if (!allowedTypes.includes(file.type)) {
-      return 'File type not supported. Please upload images or videos only';
+    const limit = images.includes(file.type) ? MAX_IMAGE : MAX_VIDEO;
+    if (file.size > limit) {
+      return `Larger than ${Math.round(limit / (1024 * 1024))} MB`;
     }
-
     return null;
   };
 
-  const processFiles = async (files: FileList | File[]) => {
-    const fileArray = Array.from(files);
-    const validFiles: File[] = [];
-    const errors: string[] = [];
-
-    // Validate all files
-    fileArray.forEach((file) => {
-      const error = validateFile(file);
-      if (error) {
-        errors.push(`${file.name}: ${error}`);
-      } else {
-        validFiles.push(file);
-      }
-    });
-
-    if (errors.length > 0) {
-      toast.error(errors.join('\n'));
+  const processFiles = async (list: FileList | File[]) => {
+    if (!guest) {
+      toast.error("Add your name before uploading");
       return;
     }
+    const files = Array.from(list);
+    const valid: File[] = [];
+    const states: FileState[] = [];
 
-    if (validFiles.length === 0) return;
+    for (const file of files) {
+      const error = validate(file);
+      states.push({ name: file.name, status: error ? "error" : "uploading", error: error ?? undefined });
+      if (!error) valid.push(file);
+    }
+    setFileStates(states);
+    if (valid.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgress({});
+    setOverall(0);
 
     try {
-      // Simulate upload progress for demo
-      const fileNames = validFiles.map(f => f.name);
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          const newProgress = { ...prev };
-          fileNames.forEach(name => {
-            if (!newProgress[name]) {
-              newProgress[name] = Math.min((newProgress[name] || 0) + Math.random() * 30, 90);
-            }
-          });
-          return newProgress;
-        });
-      }, 500);
-
-      // Prepare FormData for API call
-      const formData = new FormData();
-      validFiles.forEach(file => {
-        formData.append('files', file);
-      });
-      formData.append('albumId', albumId);
-      formData.append('userId', userId);
-
-      // Call the upload API
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      const result = await uploadFiles({
+        albumId,
+        files: valid,
+        guest,
+        onProgress: (name, pct) => {
+          if (name === "__all__") setOverall(pct);
+        },
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+      valid.forEach((file) => setFileState(file.name, { status: "done" }));
+      setOverall(100);
+
+      if (result.media.length > 0) {
+        toast.success(
+          result.errors.length
+            ? `${result.media.length} uploaded, ${result.errors.length} skipped`
+            : result.message,
+        );
+        onUploaded(result.media);
       }
-
-      clearInterval(progressInterval);
-      setUploadProgress({});
-
-      const result = await response.json();
-      toast.success(result.message || `${validFiles.length} file(s) uploaded successfully!`);
-      onUpload(validFiles as any as FileList);
-
-    } catch (error) {
-      clearInterval(progressInterval);
-      toast.error(error instanceof Error ? error.message : 'Upload failed');
+      if (result.errors.length) {
+        for (const err of result.errors) toast.error(err);
+      }
+    } catch (err) {
+      valid.forEach((file) =>
+        setFileState(file.name, {
+          status: "error",
+          error: err instanceof Error ? err.message : "Upload failed",
+        }),
+      );
+      toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setIsUploading(false);
-      setUploadProgress({});
     }
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
+    if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [albumId, guest]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
-    }
+    if (e.target.files?.length) processFiles(e.target.files);
+    e.target.value = "";
   };
 
+  const hasErrors = fileStates.some((f) => f.status === "error");
+  const activeCount = fileStates.filter((f) => f.status === "uploading").length;
+
   return (
-    <div className="relative">
+    <div className="space-y-4">
       <motion.div
-        className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 ${isDragOver
-          ? 'border-rose-500 bg-rose-50 dark:border-rose-400 dark:bg-rose-950/20'
-          : 'border-gray-300 dark:border-gray-600 hover:border-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/10'
-        }`}
         onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+        }}
+        initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className={cn(
+          "relative rounded-2xl border-2 border-dashed p-8 text-center transition-colors duration-200 sm:p-10",
+          isDragOver
+            ? "border-rose-500 bg-rose-50 dark:border-rose-400 dark:bg-rose-950/30"
+            : "border-stone-300 bg-white hover:border-rose-400 dark:border-stone-700 dark:bg-stone-900 dark:hover:border-rose-500",
+        )}
       >
         <input
-          ref={fileInputRef}
+          ref={inputRef}
           type="file"
           multiple
           accept="image/*,video/*"
+          className="sr-only"
           onChange={handleFileSelect}
-          className="hidden"
           disabled={isUploading}
+          aria-label="Choose photos and videos to upload"
         />
 
-        <motion.div
-          className="flex flex-col items-center space-y-4"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {isUploading ? (
-            <motion.div
-              className="flex flex-col items-center space-y-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <div className="relative">
-                <Upload className="h-16 w-16 text-rose-500 animate-pulse" />
-                <motion.div
-                  className="absolute inset-0 border-4 border-rose-500 border-t-transparent rounded-full"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                />
-              </div>
-              <p className="text-lg font-medium text-gray-700 dark:text-gray-300">Uploading files...</p>
-            </motion.div>
-          ) : (
-            <>
-              <motion.div
-                className="flex justify-center space-x-4"
-                whileHover={{ scale: 1.1 }}
-              >
-                <ImageIcon className="h-12 w-12 text-gray-400" />
-                <Video className="h-12 w-12 text-gray-400" />
-              </motion.div>
-              <div>
-                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
-                  Drop files here or click to upload
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Supports images (JPG, PNG, GIF, WebP) and videos (MP4, QuickTime, WebM)
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-500">
-                  Maximum file size: {Math.round(maxSize / (1024 * 1024))}MB
-                </p>
-              </div>
-              <motion.button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-8 py-3 bg-gradient-to-r from-rose-500 to-pink-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Select Files
-              </motion.button>
-            </>
-          )}
-        </motion.div>
+        <div className="mx-auto flex max-w-sm flex-col items-center gap-4">
+          <motion.div
+            className="flex items-center justify-center gap-3"
+            whileHover={reduceMotion ? undefined : { scale: 1.06 }}
+            transition={{ duration: 0.2 }}
+          >
+            <span className="flex size-12 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
+              <Images size={22} />
+            </span>
+            <span className="flex size-12 items-center justify-center rounded-full bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+              <VideoCamera size={22} />
+            </span>
+          </motion.div>
+
+          <div>
+            <h3 className="font-display text-xl font-semibold text-stone-900 dark:text-stone-100">
+              Drop photos and videos here
+            </h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+              JPG, PNG, GIF, WebP, HEIC and MP4, MOV, WebM. Photos up to 25 MB, videos up to 200 MB.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => inputRef.current?.click()}
+            disabled={isUploading}
+            className="mt-1"
+          >
+            <UploadSimple size={18} weight="bold" />
+            {isUploading ? "Uploading" : "Select files"}
+          </Button>
+        </div>
       </motion.div>
 
-      {/* Upload Progress */}
       <AnimatePresence>
-        {Object.keys(uploadProgress).length > 0 && (
+        {fileStates.length > 0 && (
           <motion.div
-            className="mt-4 bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+            initial={reduceMotion ? false : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+            role="status"
+            aria-live="polite"
           >
-            <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-3">Upload Progress</h4>
-            {Object.entries(uploadProgress).map(([fileName, progress]) => (
-              <div key={fileName} className="mb-2">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600 dark:text-gray-400 truncate max-w-xs">
-                    {fileName}
-                  </span>
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {Math.round(progress)}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span className="font-medium text-stone-800 dark:text-stone-200">
+                  {isUploading
+                    ? `Uploading ${activeCount} file${activeCount === 1 ? "" : "s"}`
+                    : hasErrors
+                      ? "Finished with warnings"
+                      : "Upload complete"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFileStates([])}
+                  aria-label="Dismiss upload list"
+                  className="press flex size-7 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {isUploading && (
+                <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
                   <motion.div
-                    className="bg-gradient-to-r from-rose-500 to-pink-500 h-2 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.3 }}
+                    className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-600"
+                    animate={{ width: `${overall}%` }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
                   />
                 </div>
-              </div>
-            ))}
+              )}
+
+              <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {fileStates.map((file) => (
+                  <li
+                    key={file.name}
+                    className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    {file.status === "done" ? (
+                      <CheckCircle size={18} className="shrink-0 text-emerald-600 dark:text-emerald-400" weight="fill" />
+                    ) : file.status === "error" ? (
+                      <WarningCircle size={18} className="shrink-0 text-rose-600 dark:text-rose-400" weight="fill" />
+                    ) : (
+                      <SpinnerDot />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-stone-700 dark:text-stone-300">
+                      {file.name}
+                    </span>
+                    {file.status === "error" && file.error && (
+                      <span className="shrink-0 text-xs text-rose-600 dark:text-rose-400">{file.error}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function SpinnerDot() {
+  return (
+    <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
   );
 }
