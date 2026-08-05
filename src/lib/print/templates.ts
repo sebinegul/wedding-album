@@ -184,8 +184,8 @@ export async function buildAlbumPrintPdf({
     doc.embedFont(await loadFont(FONT_FILES.label), { subset: true }),
   ]);
 
-  const trimW = mm(wMm * s);
-  const trimH = mm(hMm * s);
+  const trimW = mm(wMm);
+  const trimH = mm(hMm);
   const bleed = mm(BLEED_MM);
   const pageW = trimW + bleed * 2;
   const pageH = trimH + bleed * 2;
