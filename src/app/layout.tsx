@@ -3,6 +3,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AdminProvider } from "@/components/AdminProvider";
 import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
@@ -50,8 +51,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeInitScript }}
         />
         <ThemeProvider>
-          {children}
-          <Toaster position="top-center" richColors closeButton />
+          <AdminProvider>
+            {children}
+            <Toaster position="top-center" richColors closeButton />
+          </AdminProvider>
         </ThemeProvider>
       </body>
     </html>

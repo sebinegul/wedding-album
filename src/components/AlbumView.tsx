@@ -29,6 +29,7 @@ import { Lightbox } from "./Lightbox";
 import { ShareDialog } from "./ShareDialog";
 import { RealTimeIndicator } from "./RealTimeIndicator";
 import { Button, Input, Spinner } from "./ui";
+import { useAdmin } from "./AdminProvider";
 
 type Filter = "all" | "image" | "video";
 
@@ -58,14 +59,15 @@ export function AlbumView({
   const [nameDraft, setNameDraft] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [adminPrompt, setAdminPrompt] = useState(false);
-  const [adminCode, setAdminCode] = useState<string | null>(null);
+  const [adminDraft, setAdminDraft] = useState("");
   const [adminUnlocking, setAdminUnlocking] = useState(false);
+  const { isAdmin, adminCode, unlock, lock } = useAdmin();
 
-  // Admin mode is deliberately session-only: the admin code never touches
-  // localStorage. Unlock once per page visit; the server re-validates the
-  // code on every privileged request (delete any photo).
+  // Admin mode is session-wide (AdminProvider): unlock once per tab visit,
+  // and only when /api/admin/verify confirms the code. Typing alone never
+  // unlocks anything. The server re-validates the code on every privileged
+  // request (delete any photo).
   const isOwner = ownerId === album.ownerId;
-  const isAdmin = Boolean(adminCode);
   const photoCount = media.filter((m) => m.kind === "image").length;
   const videoCount = media.length - photoCount;
 
@@ -162,19 +164,15 @@ export function AlbumView({
 
   const unlockAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminCode || adminCode.trim().length < 4) return;
+    if (adminDraft.trim().length < 4) return;
     setAdminUnlocking(true);
     try {
-      const res = await fetch("/api/admin/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminCode: adminCode.trim() }),
-      });
-      if (!res.ok) {
-        setAdminCode(null);
+      const ok = await unlock(adminDraft.trim());
+      if (!ok) {
         toast.error("That admin code is not right");
         return;
       }
+      setAdminDraft("");
       setAdminPrompt(false);
       toast.success("Admin mode on - you can see and remove every photo");
     } catch {
@@ -185,7 +183,8 @@ export function AlbumView({
   };
 
   const turnOffAdmin = () => {
-    setAdminCode(null);
+    lock();
+    setAdminDraft("");
     setAdminPrompt(false);
     toast("Admin mode off");
   };
@@ -332,8 +331,8 @@ export function AlbumView({
           <div className="flex w-full gap-2 sm:w-auto">
             <Input
               type="password"
-              value={adminCode ?? ""}
-              onChange={(e) => setAdminCode(e.target.value)}
+              value={adminDraft}
+              onChange={(e) => setAdminDraft(e.target.value)}
               placeholder="Admin code"
               aria-label="Admin code"
               autoComplete="off"
