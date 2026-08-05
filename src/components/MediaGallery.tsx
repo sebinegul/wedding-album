@@ -89,10 +89,14 @@ export function MediaGallery({
   media,
   view,
   onOpen,
+  emptyTitle,
+  emptyBody,
 }: {
   media: MediaItem[];
   view: GalleryView;
   onOpen: (index: number) => void;
+  emptyTitle?: string;
+  emptyBody?: string;
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -115,11 +119,11 @@ export function MediaGallery({
         </span>
         <div>
           <h3 className="font-display text-lg font-semibold text-stone-900 dark:text-stone-100">
-            No photos yet
+            {emptyTitle ?? "No photos yet"}
           </h3>
           <p className="mx-auto mt-1 max-w-sm text-sm text-stone-500 dark:text-stone-400">
-            Share the album QR code with your guests. Every photo and video they
-            add appears here instantly.
+            {emptyBody ??
+              "Share the album QR code with your guests. Every photo and video they add appears here instantly."}
           </p>
         </div>
       </div>

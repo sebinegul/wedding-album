@@ -58,12 +58,14 @@ export function AlbumView({
   const [nameDraft, setNameDraft] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [adminPrompt, setAdminPrompt] = useState(false);
-  const [adminCode, setAdminCode] = useState("");
-  const [adminActive, setAdminActive] = useState(false);
+  const [adminCode, setAdminCode] = useState<string | null>(null);
   const [adminUnlocking, setAdminUnlocking] = useState(false);
 
+  // Admin mode is deliberately session-only: the admin code never touches
+  // localStorage. Unlock once per page visit; the server re-validates the
+  // code on every privileged request (delete any photo).
   const isOwner = ownerId === album.ownerId;
-  const isAdmin = adminActive && adminCode.length > 0;
+  const isAdmin = Boolean(adminCode);
   const photoCount = media.filter((m) => m.kind === "image").length;
   const videoCount = media.length - photoCount;
 
@@ -104,6 +106,12 @@ export function AlbumView({
     }
     return list;
   }, [media, filter, query]);
+
+  // Guests see only their own uploads; owner and admin see everything.
+  const visibleMedia = useMemo(() => {
+    if (isOwner || isAdmin) return filtered;
+    return filtered.filter((m) => m.uploadedBy === identity?.id);
+  }, [filtered, isOwner, isAdmin, identity]);
 
   const saveName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +162,7 @@ export function AlbumView({
 
   const unlockAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminCode.trim().length < 4) return;
+    if (!adminCode || adminCode.trim().length < 4) return;
     setAdminUnlocking(true);
     try {
       const res = await fetch("/api/admin/verify", {
@@ -163,18 +171,23 @@ export function AlbumView({
         body: JSON.stringify({ adminCode: adminCode.trim() }),
       });
       if (!res.ok) {
-        setAdminCode("");
+        setAdminCode(null);
         toast.error("That admin code is not right");
         return;
       }
-      setAdminActive(true);
       setAdminPrompt(false);
-      toast.success("Admin mode on - you can remove any photo");
+      toast.success("Admin mode on - you can see and remove every photo");
     } catch {
       toast.error("Could not verify the admin code");
     } finally {
       setAdminUnlocking(false);
     }
+  };
+
+  const turnOffAdmin = () => {
+    setAdminCode(null);
+    setAdminPrompt(false);
+    toast("Admin mode off");
   };
 
   const viewControls = (
@@ -283,15 +296,7 @@ export function AlbumView({
 
         <div className="flex shrink-0 items-center gap-2">
           {isAdmin ? (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setAdminActive(false);
-                setAdminCode("");
-                setAdminPrompt(false);
-              }}
-              title="Turn off admin mode"
-            >
+            <Button variant="secondary" onClick={turnOffAdmin} title="Turn off admin mode">
               <ShieldCheck size={16} weight="fill" className="text-emerald-600 dark:text-emerald-400" />
               Admin on
             </Button>
@@ -327,7 +332,7 @@ export function AlbumView({
           <div className="flex w-full gap-2 sm:w-auto">
             <Input
               type="password"
-              value={adminCode}
+              value={adminCode ?? ""}
               onChange={(e) => setAdminCode(e.target.value)}
               placeholder="Admin code"
               aria-label="Admin code"
@@ -417,15 +422,25 @@ export function AlbumView({
 
       {/* Gallery */}
       <MediaGallery
-        media={filtered}
+        media={visibleMedia}
         view={view}
         onOpen={(index) => setLightboxIndex(index)}
+        emptyTitle={
+          !isOwner && !isAdmin && media.length > 0
+            ? "You have not uploaded anything yet"
+            : undefined
+        }
+        emptyBody={
+          !isOwner && !isAdmin && media.length > 0
+            ? "Tap Add photos and your uploads will show up here for you. Only you and the couple can see this view."
+            : undefined
+        }
       />
 
       {/* Lightbox */}
-      {lightboxIndex !== null && filtered[lightboxIndex] && (
+      {lightboxIndex !== null && visibleMedia[lightboxIndex] && (
         <Lightbox
-          items={filtered}
+          items={visibleMedia}
           index={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onNavigate={(i) => setLightboxIndex(i)}

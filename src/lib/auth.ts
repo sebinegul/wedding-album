@@ -4,6 +4,11 @@ import type { GuestIdentity } from "./types";
  * Guest and owner identity helpers. Identities live in localStorage on the
  * client and travel with upload/delete requests. No passwords: an album is
  * open to anyone with the code, by design (README: guest-first access).
+ *
+ * Admin: intentionally NOT persisted. The admin code is the global app
+ * credential (create albums, delete any photo); it lives in memory for the
+ * current page session only and is re-validated server-side on every
+ * privileged action.
  */
 
 const guestKey = (albumId: string) => `wa:guest:${albumId}`;

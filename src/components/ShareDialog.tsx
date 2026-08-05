@@ -18,7 +18,10 @@ export function ShareDialog({
   album: Album;
 }) {
   const [copied, setCopied] = useState(false);
-  const joinUrl = `${window.location.origin}/join/${album.id}`;
+  const joinUrl =
+    typeof window === "undefined"
+      ? ""
+      : `${window.location.origin}/join/${album.id}`;
 
   useEffect(() => {
     if (!open) return;
