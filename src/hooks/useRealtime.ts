@@ -21,7 +21,10 @@ export function useRealtime(albumId: string, handlers: Handlers) {
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   const [online, setOnline] = useState<number | null>(null);
   const handlersRef = useRef(handlers);
-  handlersRef.current = handlers;
+
+  useEffect(() => {
+    handlersRef.current = handlers;
+  });
 
   useEffect(() => {
     const socket = io(WS_URL, {

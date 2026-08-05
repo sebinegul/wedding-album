@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
-import { ArrowRight, Check, Copy, Heart, Sparkle } from "@phosphor-icons/react";
+import { ArrowRight, Copy, Heart, Sparkle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import type { Album } from "@/lib/types";
 import { setOwnerId } from "@/lib/auth";
