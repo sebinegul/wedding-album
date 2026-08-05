@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
+
+  /* Motion curves (emil-design-eng) */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-expo: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Radius system: cards 16px, inputs 12px, controls pill */
+  --radius-card: 1rem;
+  --radius-input: 0.75rem;
+
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-scanline: scanline 2.4s ease-in-out infinite;
+  --animate-heartbeat: heartbeat 1.6s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes scanline {
+    0%, 100% { transform: translateY(0); opacity: 1; }
+    50% { transform: translateY(168px); opacity: 0.85; }
+  }
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.12); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.12); }
+    56% { transform: scale(1); }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04";
+  }
+
+  .dark body {
+    @apply bg-stone-950 text-stone-100;
+  }
+
+  ::selection {
+    @apply bg-rose-200 text-rose-950;
+  }
+
+  .dark ::selection {
+    @apply bg-rose-900 text-rose-50;
+  }
+
+  /* Focus visibility, WCAG 2.1 AA */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-rose-600;
+  }
+
+  img, video {
+    @apply select-none;
+  }
+}
+
+@layer utilities {
+  /* Press feedback for tactile elements */
+  .press {
+    transition: transform 160ms var(--ease-out-expo);
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
