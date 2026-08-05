@@ -176,6 +176,27 @@ export async function listAlbums(limit = 12): Promise<Album[]> {
     .slice(0, limit);
 }
 
+/**
+ * Returns exactly the albums whose ids are passed in, newest first.
+ * Used by the "Your albums" rail: the client proves knowledge of an id
+ * (it was created/joined by this browser), and the server never lists
+ * albums it was not asked about. Empty input returns an empty list.
+ */
+export async function listAlbumsByIds(ids: string[]): Promise<Album[]> {
+  if (ids.length === 0) return [];
+  if (USE_MONGO) {
+    const docs = await albums(await mongo())
+      .find({ id: { $in: ids } }, PROJECT)
+      .sort({ createdAt: -1 })
+      .toArray();
+    return docs as unknown as Album[];
+  }
+  return readDb()
+    .albums
+    .filter((a) => ids.includes(a.id))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 export async function getAlbumDetail(id: string): Promise<AlbumDetail | null> {
   if (USE_MONGO) {
     const db = await mongo();

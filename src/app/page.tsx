@@ -2,20 +2,10 @@ import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { CreateAlbumWizard } from "@/components/CreateAlbumWizard";
 import { QuickJoin } from "@/components/QuickJoin";
-import {
-  CTASection,
-  HowItWorksSection,
-  RecentAlbumsSection,
-} from "@/components/HomeSections";
-import { listAlbums } from "@/lib/store";
+import { YourAlbums } from "@/components/YourAlbums";
+import { CTASection, HowItWorksSection } from "@/components/HomeSections";
 
-// The recent-albums rail reads the local datastore on every request, so the
-// home page must not be statically prerendered with a stale snapshot.
-export const dynamic = "force-dynamic";
-
-export default async function HomePage() {
-  const albums = await listAlbums(6);
-
+export default function HomePage() {
   return (
     <>
       <Header />
@@ -31,7 +21,7 @@ export default async function HomePage() {
             <CreateAlbumWizard />
             <div className="space-y-8">
               <QuickJoin />
-              <RecentAlbumsSection albums={albums} />
+              <YourAlbums />
             </div>
           </div>
         </section>

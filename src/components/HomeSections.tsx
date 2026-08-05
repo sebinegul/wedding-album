@@ -3,13 +3,10 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Images,
   QrCode,
   Sparkle,
   UploadSimple,
 } from "@phosphor-icons/react";
-import type { Album } from "@/lib/types";
-import { timeAgo } from "@/lib/utils";
 
 const STEPS = [
   {
@@ -68,40 +65,6 @@ export function HowItWorksSection() {
         ))}
       </div>
     </section>
-  );
-}
-
-export function RecentAlbumsSection({ albums }: { albums: Album[] }) {
-  if (albums.length === 0) return null;
-  return (
-    <div className="rounded-2xl border border-stone-200/80 bg-white p-6 shadow-sm shadow-stone-900/5 dark:border-stone-800 dark:bg-stone-900">
-      <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-stone-900 dark:text-stone-100">
-        <Images size={18} className="text-rose-600 dark:text-rose-400" />
-        Recent albums
-      </h2>
-      <ul className="divide-y divide-stone-100 dark:divide-stone-800">
-        {albums.map((album) => (
-          <li key={album.id}>
-            <Link
-              href={`/album/${album.id}`}
-              className="group -mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/60"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-stone-800 group-hover:text-rose-700 dark:text-stone-200 dark:group-hover:text-rose-400">
-                  {album.title}
-                </p>
-                <p className="truncate text-sm text-stone-500 dark:text-stone-400">
-                  {album.couple}
-                </p>
-              </div>
-              <span className="shrink-0 text-xs text-stone-400 dark:text-stone-500">
-                {timeAgo(album.createdAt)}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

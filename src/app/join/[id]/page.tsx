@@ -9,10 +9,11 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const album = await getAlbum(id);
-  if (!album) return { title: "Album not found" };
+  if (!album) return { title: "Album not found", robots: { index: false } };
   return {
     title: `Join ${album.title}`,
     description: `You are invited to ${album.title}, the album of ${album.couple}.`,
+    robots: { index: false, follow: false },
   };
 }
 

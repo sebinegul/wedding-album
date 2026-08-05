@@ -8,10 +8,11 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const detail = await getAlbumDetail(id);
-  if (!detail) return { title: "Album not found" };
+  if (!detail) return { title: "Album not found", robots: { index: false } };
   return {
     title: detail.album.title,
     description: `${detail.album.couple} · ${detail.album.title}. Every guest photo in one place.`,
+    robots: { index: false, follow: false },
   };
 }
 

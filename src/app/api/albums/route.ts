@@ -1,9 +1,30 @@
 import { NextResponse } from "next/server";
 import { createAlbumSchema } from "@/lib/validation";
-import { createAlbum, listAlbums } from "@/lib/store";
+import { createAlbum, listAlbumsByIds } from "@/lib/store";
 
-export async function GET() {
-  const albums = await listAlbums(12);
+const ID_RE = /^[A-Za-z0-9]{4,12}$/;
+const MAX_IDS = 50;
+
+/**
+ * Albums are private-by-id: the server never lists albums it was not
+ * explicitly asked about. Callers pass ?ids=a,b,c (album ids they already
+ * know from creating or joining an album) and get exactly those back.
+ * No ids param means an empty list, never a public directory.
+ */
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const idsParam = searchParams.get("ids");
+  const ids = idsParam
+    ? [
+        ...new Set(
+          idsParam
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => ID_RE.test(s)),
+        ),
+      ].slice(0, MAX_IDS)
+    : [];
+  const albums = await listAlbumsByIds(ids);
   return NextResponse.json({ albums });
 }
 
