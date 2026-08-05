@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, PDFFont, PDFPage, rgb, type RGB } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
 import type { Album } from "@/lib/types";
 
