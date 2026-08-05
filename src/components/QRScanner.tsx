@@ -48,7 +48,7 @@ export function QRScanner({
     return () => {
       stopped = true;
       scanner.stop().catch(() => {});
-      scanner.clear().catch(() => {});
+      scanner.clear();
     };
   }, [onResult]);
 
