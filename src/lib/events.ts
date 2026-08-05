@@ -4,7 +4,7 @@ import { io, type Socket } from "socket.io-client";
  * Server-side realtime emitter.
  *
  * The Next.js API routes emit events to the standalone Socket.io server
- * (server/index.js), which fans them out to every guest browser connected
+ * (relay/index.js), which fans them out to every guest browser connected
  * to the album room. If the WS server is not running, emits are dropped
  * silently; the UI degrades to polling (see useRealtime).
  */

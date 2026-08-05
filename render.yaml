@@ -1,0 +1,16 @@
+# Render Blueprint - deploy the realtime relay with one click.
+# Usage: push this repo to GitHub, then in Render dashboard:
+#   New > Blueprint > connect the repo > Apply.
+# The app on Vercel then points NEXT_PUBLIC_WS_URL / WS_URL at
+# https://wedding-album-relay.onrender.com
+services:
+  - type: web
+    name: wedding-album-relay
+    runtime: node
+    rootDir: relay
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: WS_PORT
+        value: "3001"

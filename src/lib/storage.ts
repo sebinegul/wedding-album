@@ -24,6 +24,9 @@ import {
 
 const UPLOADS_DIR = path.join(process.cwd(), "data", "uploads");
 
+/** Vercel serverless functions run on a read-only filesystem (process.env.VERCEL === "1"). */
+const IS_VERCEL = process.env.VERCEL === "1";
+
 const DRIVER =
   (process.env.STORAGE_DRIVER ?? (process.env.S3_BUCKET ? "s3" : "local")).toLowerCase() ===
   "s3"
@@ -155,6 +158,11 @@ export async function saveUpload(
       }),
     );
   } else {
+    if (IS_VERCEL) {
+      throw new Error(
+        "Media storage is not configured for this deployment. Add S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_ENDPOINT (for R2) as Vercel environment variables (or set STORAGE_DRIVER=s3).",
+      );
+    }
     const dir = path.join(UPLOADS_DIR, albumId);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(localPath(albumId, fileName), data);

@@ -75,24 +75,30 @@ export async function POST(request: Request, { params }: Params) {
       continue;
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const { fileName, url } = await saveUpload(id, `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file.name, file.type, buffer);
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const { fileName, url } = await saveUpload(id, `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file.name, file.type, buffer);
 
-    const dims = dimsByName.get(file.name);
-    const media = await addMedia(id, {
-      url,
-      fileName,
-      originalName: file.name,
-      kind: isImage ? "image" : "video",
-      mimeType: file.type,
-      size: file.size,
-      width: dims?.width,
-      height: dims?.height,
-      uploadedBy: guest.id,
-      uploadedByName: guest.name,
-    });
-    uploaded.push(media);
-    emitToAlbum(id, "media:new", { media });
+      const dims = dimsByName.get(file.name);
+      const media = await addMedia(id, {
+        url,
+        fileName,
+        originalName: file.name,
+        kind: isImage ? "image" : "video",
+        mimeType: file.type,
+        size: file.size,
+        width: dims?.width,
+        height: dims?.height,
+        uploadedBy: guest.id,
+        uploadedByName: guest.name,
+      });
+      uploaded.push(media);
+      emitToAlbum(id, "media:new", { media });
+    } catch (err) {
+      errors.push(
+        `${file.name}: ${err instanceof Error ? err.message : "upload failed"}`,
+      );
+    }
   }
 
   return NextResponse.json({

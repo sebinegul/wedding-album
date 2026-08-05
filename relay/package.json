@@ -1,0 +1,15 @@
+{
+  "name": "wedding-album-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Socket.io relay for wedding-album realtime updates (deploy on Render/Railway/Fly.io).",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
