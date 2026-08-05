@@ -25,7 +25,7 @@
   }
   @keyframes scanline {
     0%, 100% { transform: translateY(0); opacity: 1; }
-    50% { transform: translateY(168px); opacity: 0.85; }
+    50% { transform: translateY(224px); opacity: 0.85; }
   }
   @keyframes heartbeat {
     0%, 100% { transform: scale(1); }

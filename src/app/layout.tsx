@@ -1,22 +1,54 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import type { Metadata, Viewport } from "next";
+import { Inter, Playfair_Display } from "next/font/google";
+import { Toaster } from "sonner";
+import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: 'Wedding Album - Share Your Special Moments',
-  description: 'A real-time shared photo and video album for wedding celebrations',
+  title: {
+    default: "Wedding Album",
+    template: "%s · Wedding Album",
+  },
+  description:
+    "One shared album for every guest photo. Create an album, share the QR code, and watch photos from your wedding day arrive in real time.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#e11d48",
 };
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html
+      lang="en"
+      className={`${inter.variable} ${playfair.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="min-h-dvh bg-stone-50 font-sans text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100">
+        <ThemeProvider>
+          {children}
+          <Toaster position="top-center" richColors closeButton />
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

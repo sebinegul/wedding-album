@@ -1,0 +1,54 @@
+// Prisma schema for the optional PostgreSQL (Neon) backend.
+//
+// The app runs with zero configuration using a local JSON datastore
+// (src/lib/store.ts). Set DATABASE_URL in .env to activate Prisma instead.
+// After changing this schema: npx prisma db push && npx prisma generate.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Album {
+  id        String   @id
+  title     String
+  couple    String
+  ownerName String
+  ownerId   String
+  createdAt DateTime @default(now())
+
+  guests Guest[]
+  media  Media[]
+}
+
+model Guest {
+  id        String   @id
+  albumId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  media Media[]
+}
+
+model Media {
+  id             String   @id
+  albumId        String
+  fileName       String
+  url            String
+  originalName   String
+  kind           String
+  mimeType       String
+  size           Int
+  width          Int?
+  height         Int?
+  uploadedBy     String
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+}
