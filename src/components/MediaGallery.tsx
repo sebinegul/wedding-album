@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
-import { Images, Play, User } from "@phosphor-icons/react";
+import { Check, Images, Play, User } from "@phosphor-icons/react";
 import type { MediaItem } from "@/lib/types";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 
@@ -14,11 +14,15 @@ function MediaThumb({
   onClick,
   className,
   priority = false,
+  selectable = false,
+  selected = false,
 }: {
   item: MediaItem;
   onClick: () => void;
   className?: string;
   priority?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
 }) {
   const hasDims = Boolean(item.width && item.height);
   return (
@@ -81,6 +85,21 @@ function MediaThumb({
         <User size={10} weight="fill" className="shrink-0" />
         <span className="truncate">{item.uploadedByName}</span>
       </span>
+
+      {/* Selection check (admin ZIP download mode) */}
+      {selectable && (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute right-2 top-2 flex size-6 items-center justify-center rounded-full border-2 backdrop-blur-sm transition-colors duration-150",
+            selected
+              ? "border-rose-500 bg-rose-600 text-white shadow-sm shadow-rose-600/40"
+              : "border-white/90 bg-stone-950/35 text-transparent",
+          )}
+        >
+          <Check size={13} weight="bold" />
+        </span>
+      )}
     </button>
   );
 }
@@ -91,14 +110,29 @@ export function MediaGallery({
   onOpen,
   emptyTitle,
   emptyBody,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
 }: {
   media: MediaItem[];
   view: GalleryView;
   onOpen: (index: number) => void;
   emptyTitle?: string;
   emptyBody?: string;
+  /** Admin ZIP-download mode: thumbs show a check and clicks toggle selection. */
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }) {
   const reduceMotion = useReducedMotion();
+
+  const handleClick = (item: MediaItem, index: number) => {
+    if (selectable) {
+      onToggleSelect?.(item.id);
+    } else {
+      onOpen(index);
+    }
+  };
 
   const groups = useMemo(() => {
     const map = new Map<string, MediaItem[]>();
@@ -145,7 +179,13 @@ export function MediaGallery({
             transition={{ duration: 0.35, delay: Math.min(i * 0.04, 0.3), ease: [0.16, 1, 0.3, 1] }}
             className="w-64 shrink-0 snap-center sm:w-80"
           >
-            <MediaThumb item={item} onClick={() => onOpen(i)} className="aspect-[4/3]" />
+            <MediaThumb
+              item={item}
+              onClick={() => handleClick(item, i)}
+              className="aspect-[4/3]"
+              selectable={selectable}
+              selected={selectedIds?.has(item.id) ?? false}
+            />
             <p className="mt-1.5 truncate px-1 text-xs text-stone-500 dark:text-stone-400">
               {item.uploadedByName} · {timeAgo(item.createdAt)}
             </p>
@@ -172,7 +212,12 @@ export function MediaGallery({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: Math.min(i * 0.04, 0.3), ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <MediaThumb item={item} onClick={() => onOpen(media.indexOf(item))} />
+                  <MediaThumb
+                    item={item}
+                    onClick={() => handleClick(item, media.indexOf(item))}
+                    selectable={selectable}
+                    selected={selectedIds?.has(item.id) ?? false}
+                  />
                 </motion.div>
               ))}
             </div>
@@ -193,7 +238,12 @@ export function MediaGallery({
           transition={{ duration: 0.35, delay: Math.min(i * 0.03, 0.36), ease: [0.16, 1, 0.3, 1] }}
           className="break-inside-avoid"
         >
-          <MediaThumb item={item} onClick={() => onOpen(i)} />
+          <MediaThumb
+            item={item}
+            onClick={() => handleClick(item, i)}
+            selectable={selectable}
+            selected={selectedIds?.has(item.id) ?? false}
+          />
         </motion.div>
       ))}
     </div>

@@ -17,7 +17,8 @@ export async function GET(_request: Request, { params }: Params) {
   if (!(await getAlbum(albumId))) {
     return NextResponse.json({ error: "Album not found" }, { status: 404 });
   }
-  if (!(await getMediaByFileName(albumId, fileName))) {
+  const media = await getMediaByFileName(albumId, fileName);
+  if (!media) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
@@ -26,8 +27,11 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
+  // The stored mimeType is authoritative (MediaRecorder .webm blobs are
+  // audio, not video); fall back to the filename extension for legacy rows.
+  const storedMime = media.mimeType?.split(";")[0].trim().toLowerCase();
   const headers: Record<string, string> = {
-    "Content-Type": mimeForFileName(fileName),
+    "Content-Type": storedMime || mimeForFileName(fileName),
     "Cache-Control": "public, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
   };

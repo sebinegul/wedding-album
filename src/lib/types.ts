@@ -7,7 +7,7 @@ export type Album = {
   createdAt: string;
 };
 
-export type MediaKind = "image" | "video";
+export type MediaKind = "image" | "video" | "audio";
 
 export type MediaItem = {
   id: string;

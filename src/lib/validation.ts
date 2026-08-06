@@ -27,3 +27,13 @@ export const dimsEntrySchema = z.object({
 });
 
 export const dimsSchema = z.array(dimsEntrySchema).max(50).optional();
+
+/**
+ * Admin/owner ZIP download. mediaIds must belong to the album; the server
+ * re-checks ownership per id and skips anything unknown.
+ */
+export const downloadSchema = z.object({
+  mediaIds: z.array(z.string().min(1).max(64)).min(1).max(1000),
+  adminCode: z.string().max(64).optional(),
+  ownerId: z.string().min(4).max(64).optional(),
+});

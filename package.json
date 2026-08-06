@@ -16,6 +16,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "fflate": "^0.8.3",
     "html5-qrcode": "^2.3.8",
     "mongodb": "^7.5.0",
     "motion": "^12.43.0",

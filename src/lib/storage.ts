@@ -37,9 +37,20 @@ export const storageDriver: "local" | "s3" = DRIVER;
 
 export const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB
 export const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200 MB
+export const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25 MB (~45+ min of voice)
 
 const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"]);
 const VIDEO_MIMES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const AUDIO_MIMES = new Set([
+  "audio/webm",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/x-m4a",
+  "audio/aac",
+]);
 
 export function isSupportedImage(mime: string): boolean {
   return IMAGE_MIMES.has(mime);
@@ -49,8 +60,12 @@ export function isSupportedVideo(mime: string): boolean {
   return VIDEO_MIMES.has(mime);
 }
 
+export function isSupportedAudio(mime: string): boolean {
+  return AUDIO_MIMES.has(mime);
+}
+
 export function isSupportedType(mime: string): boolean {
-  return isSupportedImage(mime) || isSupportedVideo(mime);
+  return isSupportedImage(mime) || isSupportedVideo(mime) || isSupportedAudio(mime);
 }
 
 function sanitizeFileName(name: string): string {
@@ -61,7 +76,7 @@ function sanitizeFileName(name: string): string {
 
 function extensionFor(mime: string, originalName: string): string {
   const fromName = path.extname(originalName).toLowerCase();
-  if (/^\.(jpe?g|png|gif|webp|heic|mp4|mov|webm)$/.test(fromName)) return fromName;
+  if (/^\.(jpe?g|png|gif|webp|heic|mp4|mov|webm|m4a|aac|ogg|wav|mp3)$/.test(fromName)) return fromName;
   const map: Record<string, string> = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -71,6 +86,14 @@ function extensionFor(mime: string, originalName: string): string {
     "video/mp4": ".mp4",
     "video/quicktime": ".mov",
     "video/webm": ".webm",
+    "audio/webm": ".webm",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
+    "audio/mpeg": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/aac": ".aac",
   };
   return map[mime] ?? ".bin";
 }
@@ -228,6 +251,11 @@ const MIME_BY_EXT: Record<string, string> = {
   ".mp4": "video/mp4",
   ".mov": "video/quicktime",
   ".webm": "video/webm",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
 };
 
 export function mimeForFileName(fileName: string): string {

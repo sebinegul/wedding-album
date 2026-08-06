@@ -7,11 +7,13 @@ import confetti from "canvas-confetti";
 import {
   ArrowLeft,
   CaretDown,
+  DownloadSimple,
   GridFour,
   Images,
   ListBullets,
   LockKey,
   MagnifyingGlass,
+  Microphone,
   ShareNetwork,
   ShieldCheck,
   UploadSimple,
@@ -27,6 +29,7 @@ import { MediaGallery, type GalleryView } from "./MediaGallery";
 import { UploadZone } from "./UploadZone";
 import { Lightbox } from "./Lightbox";
 import { ShareDialog } from "./ShareDialog";
+import { AudioGuestbook } from "./AudioGuestbook";
 import { RealTimeIndicator } from "./RealTimeIndicator";
 import { Button, Input, Spinner } from "./ui";
 import { useAdmin } from "./AdminProvider";
@@ -61,6 +64,9 @@ export function AlbumView({
   const [adminPrompt, setAdminPrompt] = useState(false);
   const [adminDraft, setAdminDraft] = useState("");
   const [adminUnlocking, setAdminUnlocking] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [downloading, setDownloading] = useState(false);
   const { isAdmin, adminCode, unlock, lock } = useAdmin();
 
   // Admin mode is session-wide (AdminProvider): unlock once per tab visit,
@@ -69,7 +75,8 @@ export function AlbumView({
   // request (delete any photo).
   const isOwner = ownerId === album.ownerId;
   const photoCount = media.filter((m) => m.kind === "image").length;
-  const videoCount = media.length - photoCount;
+  const videoCount = media.filter((m) => m.kind === "video").length;
+  const audioCount = media.filter((m) => m.kind === "audio").length;
 
   const { status, online } = useRealtime(album.id, {
     onNewMedia: (item) => {
@@ -95,8 +102,10 @@ export function AlbumView({
     },
   });
 
+  // Voice messages live in their own section and never enter the photo/video
+  // gallery (search, filters, lightbox and zip selection cover media only).
   const filtered = useMemo(() => {
-    let list = media;
+    let list = media.filter((m) => m.kind !== "audio");
     if (filter !== "all") list = list.filter((m) => m.kind === filter);
     const q = query.trim().toLowerCase();
     if (q) {
@@ -110,10 +119,16 @@ export function AlbumView({
   }, [media, filter, query]);
 
   // Guests see only their own uploads; owner and admin see everything.
-  const visibleMedia = useMemo(() => {
+  const galleryMedia = useMemo(() => {
     if (isOwner || isAdmin) return filtered;
     return filtered.filter((m) => m.uploadedBy === identity?.id);
   }, [filtered, isOwner, isAdmin, identity]);
+
+  const audioItems = useMemo(() => {
+    const audio = media.filter((m) => m.kind === "audio");
+    if (isOwner || isAdmin) return audio;
+    return audio.filter((m) => m.uploadedBy === identity?.id);
+  }, [media, isOwner, isAdmin, identity]);
 
   const saveName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +202,59 @@ export function AlbumView({
     setAdminDraft("");
     setAdminPrompt(false);
     toast("Admin mode off");
+  };
+
+  const toggleSelectMode = () => {
+    setSelectMode((v) => !v);
+    setSelected(new Set());
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const downloadZip = async () => {
+    if (selected.size === 0) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/albums/${album.id}/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaIds: [...selected],
+          adminCode: isAdmin ? adminCode : undefined,
+          ownerId: isOwner ? ownerId : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Could not build the zip");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${album.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "album"}-${album.id}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${selected.size} file${selected.size === 1 ? "" : "s"}`);
+      setSelected(new Set());
+      setSelectMode(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not build the zip");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const viewControls = (
@@ -274,7 +342,10 @@ export function AlbumView({
           <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 sm:text-4xl dark:text-stone-100">
             {album.title}
           </h1>
-          <p className="mt-1.5 font-display text-lg italic text-rose-600 dark:text-rose-400">
+          {/* Couple names in Great Vibes, matching the printed table cards.
+              Script fonts already carry their own slant, so no synthetic
+              italic (browser-obliqued script looks broken). */}
+          <p className="mt-1.5 font-script text-xl leading-snug text-rose-600 dark:text-rose-400">
             {album.couple}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-500 dark:text-stone-400">
@@ -286,6 +357,12 @@ export function AlbumView({
               <VideoCamera size={15} />
               {videoCount} video{videoCount === 1 ? "" : "s"}
             </span>
+            {audioCount > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <Microphone size={15} />
+                {audioCount} voice message{audioCount === 1 ? "" : "s"}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <Users size={15} />
               {guests.length} guest{guests.length === 1 ? "" : "s"}
@@ -309,6 +386,16 @@ export function AlbumView({
             <ShareNetwork size={16} />
             Share
           </Button>
+          {(isOwner || isAdmin) && (
+            <Button
+              variant={selectMode ? "secondary" : "ghost"}
+              onClick={toggleSelectMode}
+              title="Select photos and videos to download as a zip"
+            >
+              <DownloadSimple size={16} />
+              {selectMode ? "Cancel" : "Download"}
+            </Button>
+          )}
           <Button onClick={() => setUploadOpen((v) => !v)}>
             <UploadSimple size={16} weight="bold" />
             {uploadOpen ? "Close upload" : "Add photos"}
@@ -398,32 +485,84 @@ export function AlbumView({
         )}
       </AnimatePresence>
 
-      {/* Toolbar */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        {viewControls}
-        <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
-          {filterControls}
-          <div className="relative">
-            <MagnifyingGlass
-              size={15}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400"
-            />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by guest or file name"
-              aria-label="Search the album"
-              className="h-9 w-56 rounded-full pl-9 text-sm"
-            />
+      {/* Toolbar / zip selection */}
+      {selectMode ? (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 dark:border-rose-900 dark:bg-rose-950/30">
+          <span className="text-sm font-semibold text-stone-800 dark:text-stone-200">
+            {selected.size} of {galleryMedia.length} selected
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setSelected(new Set(galleryMedia.map((m) => m.id)))}
+          >
+            Select all
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelected(new Set())}
+            disabled={selected.size === 0}
+          >
+            Clear
+          </Button>
+          <Button
+            size="sm"
+            className="ml-auto"
+            onClick={downloadZip}
+            disabled={selected.size === 0 || downloading}
+          >
+            {downloading ? (
+              <>
+                <Spinner /> Zipping...
+              </>
+            ) : (
+              <>
+                <DownloadSimple size={16} weight="bold" /> Download zip ({selected.size})
+              </>
+            )}
+          </Button>
+        </div>
+      ) : (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          {viewControls}
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
+            {filterControls}
+            <div className="relative">
+              <MagnifyingGlass
+                size={15}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400"
+              />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by guest or file name"
+                aria-label="Search the album"
+                className="h-9 w-56 rounded-full pl-9 text-sm"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Audio guestbook */}
+      <AudioGuestbook
+        albumId={album.id}
+        guest={identity}
+        items={audioItems}
+        canDelete={(item) => isOwner || isAdmin || item.uploadedBy === identity?.id}
+        onDelete={deleteItem}
+        onUploaded={(added) => setMedia((prev) => [...added, ...prev])}
+      />
 
       {/* Gallery */}
       <MediaGallery
-        media={visibleMedia}
+        media={galleryMedia}
         view={view}
         onOpen={(index) => setLightboxIndex(index)}
+        selectable={selectMode}
+        selectedIds={selected}
+        onToggleSelect={toggleSelected}
         emptyTitle={
           !isOwner && !isAdmin && media.length > 0
             ? "You have not uploaded anything yet"
@@ -437,9 +576,9 @@ export function AlbumView({
       />
 
       {/* Lightbox */}
-      {lightboxIndex !== null && visibleMedia[lightboxIndex] && (
+      {lightboxIndex !== null && galleryMedia[lightboxIndex] && (
         <Lightbox
-          items={visibleMedia}
+          items={galleryMedia}
           index={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onNavigate={(i) => setLightboxIndex(i)}

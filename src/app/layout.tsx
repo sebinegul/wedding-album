@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -17,6 +18,15 @@ const playfair = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-playfair",
   display: "swap",
+});
+
+// Great Vibes (script) is vendored for the print PDFs; reuse the same file
+// for the web so the couple names on the album page match the printed cards.
+const greatVibes = localFont({
+  src: "../lib/print/fonts/GreatVibes-Regular.ttf",
+  variable: "--font-greatvibes",
+  display: "swap",
+  weight: "400",
 });
 
 export const metadata: Metadata = {
@@ -40,7 +50,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${playfair.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${greatVibes.variable}`}
       suppressHydrationWarning
     >
       <head />

@@ -8,7 +8,10 @@ import {
 } from "@/lib/store";
 import {
   deleteUpload,
+  isSupportedAudio,
+  isSupportedImage,
   isSupportedType,
+  MAX_AUDIO_SIZE,
   MAX_IMAGE_SIZE,
   MAX_VIDEO_SIZE,
   saveUpload,
@@ -59,12 +62,16 @@ export async function POST(request: Request, { params }: Params) {
   const errors: string[] = [];
 
   for (const file of files) {
-    if (!isSupportedType(file.type)) {
+    // MediaRecorder blobs carry codec params ("audio/webm;codecs=opus"); the
+    // MIME sets compare the bare type, so strip parameters before checking.
+    const mimeType = file.type.split(";")[0].trim().toLowerCase();
+    if (!isSupportedType(mimeType)) {
       errors.push(`${file.name}: unsupported file type`);
       continue;
     }
-    const isImage = file.type.startsWith("image/");
-    const limit = isImage ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
+    const isImage = isSupportedImage(mimeType);
+    const isAudio = isSupportedAudio(mimeType);
+    const limit = isImage ? MAX_IMAGE_SIZE : isAudio ? MAX_AUDIO_SIZE : MAX_VIDEO_SIZE;
     if (file.size > limit) {
       errors.push(
         `${file.name}: exceeds ${Math.round(limit / (1024 * 1024))} MB limit`,
@@ -78,15 +85,15 @@ export async function POST(request: Request, { params }: Params) {
 
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const { fileName, url } = await saveUpload(id, `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file.name, file.type, buffer);
+      const { fileName, url } = await saveUpload(id, `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, file.name, mimeType, buffer);
 
       const dims = dimsByName.get(file.name);
       const media = await addMedia(id, {
         url,
         fileName,
         originalName: file.name,
-        kind: isImage ? "image" : "video",
-        mimeType: file.type,
+        kind: isImage ? "image" : isAudio ? "audio" : "video",
+        mimeType,
         size: file.size,
         width: dims?.width,
         height: dims?.height,
